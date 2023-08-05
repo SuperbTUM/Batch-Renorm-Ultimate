@@ -61,6 +61,7 @@ class BatchRenormalization1D(nn.Module):
         batch_ch_var_biased = torch.var(x, dim=0, unbiased=False, keepdim=True)
 
         if self.training:
+            self.num_tracked_batch += 1
             r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var + self.eps)), 1.0 / self.r_max, self.r_max).data
             d = torch.clamp((batch_ch_mean - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps), -self.d_max,
                             self.d_max).data
@@ -68,11 +69,11 @@ class BatchRenormalization1D(nn.Module):
             x = ((x - batch_ch_mean) * r) / torch.sqrt(batch_ch_var_biased + self.eps) + d
             x = self.gamma * x + self.beta
 
-            if self.r_max < self.max_r_max:
+            if self.num_tracked_batch > 5000 and self.r_max < self.max_r_max:
                 # This should stay flexible
                 self.r_max += 0.5 * self.r_max_inc_step * x.shape[0]
 
-            if self.d_max < self.max_d_max:
+            if self.num_tracked_batch > 5000 and self.d_max < self.max_d_max:
                 # This should stay flexible
                 self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 

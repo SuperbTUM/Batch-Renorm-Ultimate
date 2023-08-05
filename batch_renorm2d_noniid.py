@@ -63,14 +63,15 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
             for j in range(x_mini.size(0)):
                 x_normed[self.num_instance * j + i % self.num_instance] = x_mini[j]
 
-        self.num_tracked_batch += 1
-        if self.num_tracked_batch > 5000 and self.r_max < self.max_r_max:
-            # This should stay flexible
-            self.r_max += 0.5 * self.r_max_inc_step * x.shape[0]
+        if self.training:
+            self.num_tracked_batch += 1
+            if self.num_tracked_batch > 5000 and self.r_max < self.max_r_max:
+                # This should stay flexible
+                self.r_max += 0.5 * self.r_max_inc_step * x.shape[0]
 
-        if self.num_tracked_batch > 2000 and self.d_max < self.max_d_max:
-            # This should stay flexible
-            self.d_max += 2 * self.d_max_inc_step * x.shape[0]
+            if self.num_tracked_batch > 5000 and self.d_max < self.max_d_max:
+                # This should stay flexible
+                self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 
         x_normed = torch.stack(x_normed, dim=0)
         return x_normed

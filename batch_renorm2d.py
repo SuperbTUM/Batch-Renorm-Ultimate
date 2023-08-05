@@ -77,7 +77,7 @@ class BatchRenormalization2D(nn.Module):
                 # This should stay flexible
                 self.r_max += 0.5 * self.r_max_inc_step * x.shape[0]
 
-            if self.num_tracked_batch > 2000 and self.d_max < self.max_d_max:
+            if self.num_tracked_batch > 5000 and self.d_max < self.max_d_max:
                 # This should stay flexible
                 self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 
