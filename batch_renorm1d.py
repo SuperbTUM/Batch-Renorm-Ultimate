@@ -45,8 +45,8 @@ class BatchRenormalization1D(nn.Module):
         bias = bias.reshape(1, bias.size(0))
         running_mean = self.dict_state['running_mean'].data
         running_mean = running_mean.reshape(1, running_mean.size(0))
-        running_var = self.dict_state['running_var']
-        running_var = running_var.data.reshape(1, running_var.size(0))
+        running_var = self.dict_state['running_var'].data
+        running_var = running_var.reshape(1, running_var.size(0))
 
         self.gamma.data = weight.clone()
         self.beta.data = bias.clone()

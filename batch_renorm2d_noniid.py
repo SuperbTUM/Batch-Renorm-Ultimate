@@ -43,7 +43,7 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
             batch_ch_mean = torch.mean(x_mini, dim=(0, 2, 3), keepdim=True)
             # in version 2.0: correction, otherwise: unbiased=False
             batch_ch_var_unbiased = torch.var(x_mini, dim=(0, 2, 3), unbiased=True, keepdim=True)
-            batch_ch_var_biased = torch.var(x, dim=(0, 2, 3), unbiased=False, keepdim=True)
+            batch_ch_var_biased = torch.var(x_mini, dim=(0, 2, 3), unbiased=False, keepdim=True)
 
             if self.training:
                 r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var + self.eps)), 1.0 / self.r_max, self.r_max).data
