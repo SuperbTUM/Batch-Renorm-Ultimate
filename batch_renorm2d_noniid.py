@@ -36,7 +36,7 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
             for j in range(x.size(0) // self.num_instance):
                 x_split.append(x[i+self.num_instance*j])
             x_splits.append(torch.stack(x_split))
-        x_normed = [torch.tensor(0.) for _ in range(x.size(0))]
+        x_normed = torch.zeros_like(x)
 
         for i, x_mini in enumerate(x_splits):
 
@@ -73,5 +73,4 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
                 # This should stay flexible
                 self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 
-        x_normed = torch.stack(x_normed, dim=0)
         return x_normed
