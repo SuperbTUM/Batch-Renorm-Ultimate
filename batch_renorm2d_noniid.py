@@ -44,53 +44,56 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
 
     def _forward_train(self, x):
         """Looks like group normalization"""
-        minibatch_num = x.size(0) // self.num_instance
+        minibatch_size = x.size(0) // self.num_instance
         x_splits = []
         for i in range(self.num_instance):
             x_split = x[i:len(x):self.num_instance]
             x_splits.append(x_split)
-        x_splits = torch.stack(x_splits)
+        x_splits = torch.cat(x_splits, dim=0)
 
         x_normed = torch.zeros_like(x)
 
-        batch_ch_mean = torch.mean(x_splits, dim=(3, 4), keepdim=True)
-        # in version 2.0: correction, otherwise: unbiased=False
-        batch_ch_var_unbiased = torch.var(x_splits, dim=(3, 4), unbiased=True, keepdim=True)
-        batch_ch_var_biased = torch.var(x_splits, dim=(3, 4), unbiased=False, keepdim=True)
+        batch_ch_mean = torch.mean(x_splits, dim=(2, 3), keepdim=True)
+        batch_ch_var_pre = torch.mean(x_splits ** 2, dim=(2, 3), keepdim=True)
+
+        x_splits = x_splits.view(self.num_instance, minibatch_size, self.num_features, x.size(2), x.size(3))
+
+        batch_ch_mean = batch_ch_mean.view(self.num_instance, minibatch_size, self.num_features, 1, 1)
+        batch_ch_var_pre = batch_ch_var_pre.view(self.num_instance, minibatch_size, self.num_features, 1, 1)
 
         group_ch_mean = batch_ch_mean.mean(dim=1, keepdim=True)
-        group_ch_var = batch_ch_var_biased.mean(dim=1, keepdim=True)
+        group_ch_var_pre = batch_ch_var_pre.mean(dim=1, keepdim=True)
+        group_ch_var_biased = group_ch_var_pre - group_ch_mean ** 2
 
-        r = torch.clamp(torch.sqrt((group_ch_var + self.eps) / (self.running_avg_var.unsqueeze(0) + self.eps)),
+        r = torch.clamp(torch.sqrt((group_ch_var_biased + self.eps) / (self.running_avg_var.unsqueeze(0) + self.eps)),
                         1.0 / self.r_max, self.r_max).data
-        d = torch.clamp((group_ch_mean - self.running_avg_mean.unsqueeze(0)) / torch.sqrt(
-            self.running_avg_var.unsqueeze(0) + self.eps),
+        d = torch.clamp((group_ch_mean - self.running_avg_mean.unsqueeze(0)) / torch.sqrt(self.running_avg_var.unsqueeze(0) + self.eps),
                         -self.d_max,
                         self.d_max).data
 
-        x_splits = ((x_splits - group_ch_mean) * r) / torch.sqrt(group_ch_var + self.eps) + d
+        x_splits = ((x_splits - group_ch_mean) * r) / torch.sqrt(group_ch_var_biased + self.eps) + d
         x_splits = self.gamma * x_splits + self.beta
 
         self.num_tracked_batch += 1
-        if self.num_tracked_batch > 5000 and self.r_max < self.max_r_max:
-            # This should stay flexible
-            self.r_max += 0.5 * self.r_max_inc_step * x.shape[0]
+        if self.num_tracked_batch > 500 and self.r_max < self.max_r_max:
+            self.r_max += 1.2 * self.r_max_inc_step * x.shape[0]
 
-        if self.num_tracked_batch > 5000 and self.d_max < self.max_d_max:
-            # This should stay flexible
-            self.d_max += 2 * self.d_max_inc_step * x.shape[0]
+        if self.num_tracked_batch > 500 and self.d_max < self.max_d_max:
+            self.d_max += 4.8 * self.d_max_inc_step * x.shape[0]
 
         x_splits = x_splits.view(-1, x_splits.size(2), x_splits.size(3), x_splits.size(4))
 
         for j in range(len(x_splits)):
-            x_normed[self.num_instance * (j % minibatch_num) + j // minibatch_num] = x_splits[j]
+            x_normed[self.num_instance * (j % minibatch_size) + j // minibatch_size] = x_splits[j]
 
-        batch_ch_mean = batch_ch_mean.view(-1, x.size(1), 1, 1)
-        batch_ch_var_unbiased = batch_ch_var_unbiased.view(-1, x.size(1), 1, 1)
+        batch_ch_mean = batch_ch_mean.view(-1, self.num_features, 1, 1)
+        batch_ch_var_pre = batch_ch_var_pre.view(-1, self.num_features, 1, 1)
+        batch_ch_var_biased = (batch_ch_var_pre - batch_ch_mean ** 2)
+
         self.running_avg_mean = self.running_avg_mean + self.momentum * (
-                batch_ch_mean.mean(dim=0, keepdim=True).data - self.running_avg_mean)
+                    batch_ch_mean.mean(dim=0, keepdim=True).data - self.running_avg_mean)
         self.running_avg_var = self.running_avg_var + self.momentum * (
-                batch_ch_var_unbiased.mean(dim=0, keepdim=True).data - self.running_avg_var)
+                    batch_ch_var_biased.mean(dim=0, keepdim=True).data - self.running_avg_var)
 
         return x_normed
 
