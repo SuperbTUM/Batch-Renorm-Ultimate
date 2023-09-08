@@ -83,8 +83,8 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
 
         x_splits = x_splits.view(-1, x_splits.size(2), x_splits.size(3), x_splits.size(4))
 
-        for j in range(len(x_splits)):
-            x_normed[self.num_instance * (j % minibatch_size) + j // minibatch_size] = x_splits[j]
+        indices = torch.arange(0, x.size(0))
+        x_normed[self.num_instance * (indices % minibatch_size) + indices // minibatch_size] = x_splits[:]
 
         batch_ch_mean = batch_ch_mean.view(-1, self.num_features, 1, 1)
         batch_ch_var_pre = batch_ch_var_pre.view(-1, self.num_features, 1, 1)
@@ -98,10 +98,12 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         return x_normed
 
     def _forward_eval(self, x):
-        batch_ch_mean = x.mean(dim=[2, 3], keepdim=True)
-        batch_ch_var = x.var(dim=[2, 3], keepdim=True)
+        batch_ch_mean = torch.mean(x, dim=(2, 3), keepdim=True)
+        batch_ch_var_pre = torch.mean(x ** 2, dim=(2, 3), keepdim=True)
+        batch_ch_var_biased = (batch_ch_var_pre - batch_ch_mean ** 2)
+
         running_avg_mean = (1 - self.inference_statistics) * self.running_avg_mean + self.inference_statistics * batch_ch_mean
-        running_avg_var = (1 - self.inference_statistics) * self.running_avg_var + self.inference_statistics * batch_ch_var
+        running_avg_var = (1 - self.inference_statistics) * self.running_avg_var + self.inference_statistics * batch_ch_var_biased
         x = (x - running_avg_mean) / torch.sqrt(running_avg_var + self.eps)
         x = self.gamma * x + self.beta
         return x
